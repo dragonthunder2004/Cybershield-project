@@ -110,10 +110,15 @@ const VerificationForm = () => {
         }),
       });
 
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Verification failed');
+      }
       const data = await response.json();
       setResult(data.match);
     } catch (error) {
       console.error('Error:', error);
+      alert(error.message || 'Verification failed. Please try again.');
       setResult(false);
     } finally {
       setLoading(false);

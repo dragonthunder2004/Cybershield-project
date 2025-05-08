@@ -3,6 +3,7 @@ const mysql = require('mysql2');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const fetch = require('node-fetch');
+const rateLimit = require('express-rate-limit');
 
 dotenv.config();
 
@@ -11,6 +12,17 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Create rate limiter for verify endpoint
+const verifyLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, // 24 hours
+  max: 5, // Limit each IP to 5 requests per windowMs
+  message: {
+    error: 'Too many verification attempts from this IP. Please try again after 24 hours.'
+  },
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
 
 // Create MySQL connection pool
 const pool = mysql.createPool({
@@ -94,7 +106,7 @@ app.post('/api/signup', async (req, res) => {
 });
 
 // Verify user data
-app.post('/api/verify', async (req, res) => {
+app.post('/api/verify', verifyLimiter, async (req, res) => {
   const { hashes, turnstileToken } = req.body;
 
   // Verify Turnstile token
@@ -104,10 +116,13 @@ app.post('/api/verify', async (req, res) => {
   }
 
   try {
-    const [rows] = await pool.promise().execute(
-      'SELECT * FROM user_data WHERE mobile_hash = ? AND pan_hash = ? AND aadhar_hash = ? AND passport_hash = ? AND email_hash = ?',
-      [hashes.mobile, hashes.pan, hashes.aadhar, hashes.passport, hashes.email]
-    );
+    // Get the field type and hash
+    const fieldType = Object.keys(hashes)[0];
+    const hash = hashes[fieldType];
+    
+    // Build the query dynamically based on the field type
+    const query = `SELECT * FROM user_data WHERE ${fieldType}_hash = ?`;
+    const [rows] = await pool.promise().execute(query, [hash]);
 
     if (rows.length > 0) {
       res.json({ match: true });
