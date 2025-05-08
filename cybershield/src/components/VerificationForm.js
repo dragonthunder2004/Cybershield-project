@@ -2,13 +2,32 @@ import React, { useState, useEffect, useRef } from 'react';
 import CryptoJS from 'crypto-js';
 
 const VerificationForm = () => {
-  const [formData, setFormData] = useState({
-    mobile: '',
-    pan: '',
-    aadhar: '',
-    passport: '',
-    email: ''
-  });
+  const [selectedField, setSelectedField] = useState('mobile');
+  const [inputValue, setInputValue] = useState('');
+  const [isValid, setIsValid] = useState(true);
+  
+  const validationPatterns = {
+    mobile: {
+      pattern: /^[6-9]\d{9}$/,
+      message: 'Enter a valid 10-digit mobile number starting with 6-9'
+    },
+    pan: {
+      pattern: /^[A-Z]{5}[0-9]{4}[A-Z]$/,
+      message: 'Enter a valid PAN number (e.g., ABCDE1234F)'
+    },
+    aadhar: {
+      pattern: /^[2-9]\d{11}$/,
+      message: 'Enter a valid 12-digit Aadhar number'
+    },
+    passport: {
+      pattern: /^[A-Z][0-9]{7}$/,
+      message: 'Enter a valid passport number (e.g., A1234567)'
+    },
+    email: {
+      pattern: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+      message: 'Enter a valid email address'
+    }
+  };
   const [turnstileToken, setTurnstileToken] = useState('');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -47,12 +66,18 @@ const VerificationForm = () => {
     };
   }, []);
 
-  const handleChange = (e) => {
+  const handleFieldChange = (e) => {
+    setSelectedField(e.target.value);
+    setInputValue('');
+    setIsValid(true);
+  };
+
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setInputValue(value);
     
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    const pattern = validationPatterns[selectedField].pattern;
+    setIsValid(pattern.test(value));
   };
 
   const generateHash = (value) => {
@@ -63,12 +88,14 @@ const VerificationForm = () => {
     e.preventDefault();
     setLoading(true);
 
+    if (!isValid) {
+      alert('Please enter a valid value for the selected field');
+      setLoading(false);
+      return;
+    }
+
     const hashes = {
-      mobile: generateHash(formData.mobile),
-      pan: generateHash(formData.pan),
-      aadhar: generateHash(formData.aadhar),
-      passport: generateHash(formData.passport),
-      email: generateHash(formData.email)
+      [selectedField]: generateHash(inputValue)
     };
 
     try {
@@ -98,80 +125,58 @@ const VerificationForm = () => {
       <h2 className="text-2xl font-bold mb-6 text-center">Verification</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700">Mobile Number</label>
+          <label className="block text-sm font-medium text-gray-700">Select Field to Verify</label>
+          <select
+            value={selectedField}
+            onChange={handleFieldChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          >
+            <option value="mobile">Mobile Number</option>
+            <option value="pan">PAN Card</option>
+            <option value="aadhar">Aadhar Card</option>
+            <option value="passport">Passport</option>
+            <option value="email">Email</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            {selectedField.charAt(0).toUpperCase() + selectedField.slice(1)}
+          </label>
           <input
             type="text"
-            name="mobile"
-            value={formData.mobile}
-            onChange={handleChange}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            value={inputValue}
+            onChange={handleInputChange}
+            className={`mt-1 block w-full rounded-md shadow-sm focus:ring-indigo-500 ${isValid ? 'border-gray-300 focus:border-indigo-500' : 'border-red-500 focus:border-red-500'}`}
+            placeholder={`Enter ${selectedField}`}
             required
           />
+          {!isValid && (
+            <p className="mt-1 text-sm text-red-600">
+              {validationPatterns[selectedField].message}
+            </p>
+          )}
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700">PAN Number</label>
-          <input
-            type="text"
-            name="pan"
-            value={formData.pan}
-            onChange={handleChange}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            required
-          />
+
+
+        <div className="mt-4 flex flex-col space-y-4">
+          <div ref={turnstileRef} className="self-center"></div>
+          
+          <button
+            type="submit"
+            disabled={loading || !isValid || !turnstileToken}
+            className={`px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white ${loading || !turnstileToken ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+          >
+            {loading ? 'Verifying...' : 'Verify'}
+          </button>
+
+          {result !== null && (
+            <div className={`p-4 rounded-md ${result ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              {result ? 'Verification successful!' : 'Verification failed'}
+            </div>
+          )}
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Aadhar Number</label>
-          <input
-            type="text"
-            name="aadhar"
-            value={formData.aadhar}
-            onChange={handleChange}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            required
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Passport Number</label>
-          <input
-            type="text"
-            name="passport"
-            value={formData.passport}
-            onChange={handleChange}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            required
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Email</label>
-          <input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            required
-          />
-        </div>
-        <div className="my-4 flex justify-center">
-          <div
-            id="turnstile-widget"
-            ref={turnstileRef}
-            className="overflow-hidden"
-          ></div>
-        </div>
-        <button
-          type="submit"
-          disabled={loading || !turnstileToken}
-          className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-        >
-          {loading ? 'Verifying...' : 'Verify'}
-        </button>
       </form>
-      {result !== null && (
-        <div className={`mt-4 p-4 rounded-md ${result ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-          {result ? 'Verification successful!' : 'Verification failed'}
-        </div>
-      )}
     </div>
   );
 };
